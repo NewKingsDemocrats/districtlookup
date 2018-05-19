@@ -288,7 +288,6 @@ function loopThroughImport_(mode) {
   var values = importSheet.getDataRange().getValues();
   
   var scriptProperties = PropertiesService.getScriptProperties();
-  // TODO: This looks like it's not working. ********
   var startRow = Number(scriptProperties.getProperty('start_row'));
   Logger.log('start_row for this run is ' + scriptProperties.getProperty('start_row'));
   if (!startRow) {
@@ -301,13 +300,18 @@ function loopThroughImport_(mode) {
     var currTime = (new Date()).getTime();
     if (currTime - startTime >= MAX_RUNNING_TIME) {
       Logger.log('Getting close to timeout, so setting up new trigger and ending this run at i: ' + i);
-      scriptProperties.setProperty('start_row', i); // Bug, this is always 0;
+      scriptProperties.setProperty('start_row', i);
       Logger.log('start_row is now ' + scriptProperties.getProperty('start_row'));
-      ScriptApp.newTrigger("movePeopleToAD")
+      // Make sure trigger is for correct mode.
+      var scriptToTrigger = 'movePeopleToAD';
+      if (mode == 'changed' ) {
+        scriptToTrigger = 'checkForChanges';
+      }
+      ScriptApp.newTrigger(scriptToTrigger)
                .timeBased()
                .at(new Date(currTime + REASONABLE_TIME_TO_WAIT))
                .create();
-      break;
+      return;
     }
     // Find each one in the master sheet, and if not there add it.
     var userRowInMasterSheet = maybeGetUsersRowInCorrectSheetFromCache_(values[i][idColImport], masterSheet, idColMaster); 
@@ -319,18 +323,12 @@ function loopThroughImport_(mode) {
       // If adding, then also add AD/ED, then add to AD sheet, and update tracker col
       addNewUserToMasterSheet_(i, importSheet, masterSheet);
     }
-    
-    // if (i == 200) { break } // Temporary early break to only do first 20 rows for testing.
-    
-    
-    
-    
-    // Do we need to record a date of when they were last updated from the master? *** TODO, clarify ***
   }
   // Reset the timeout tracker now we've reached the end.
   scriptProperties.deleteProperty("start_row");
   // Clean up triggers.
-  deleteAllTriggers(); // TODO: Do I definitely want to remove them all? 
+  deleteAllTriggers();
+  Logger.log('Script completed successfully in ' + mode + ' mode.');
 }
 
 /**
@@ -420,7 +418,6 @@ function updateExistingUserOnMasterSheet_(id, userPositionImportSheet, userPosit
   var importValues = importSheet.getDataRange().getValues();
   var masterValues = masterSheet.getDataRange().getValues();
   
-  // TODO: Changing this late at night, hope I don't break something *****
   var previousAd = masterValues[userPositionMasterSheet][adColMaster];
   Logger.log('previous ad: ' + previousAd);
   var previousEd = masterValues[userPositionMasterSheet][edColMaster];
@@ -455,10 +452,12 @@ function updateExistingUserOnMasterSheet_(id, userPositionImportSheet, userPosit
     // If AD changes, delete row in old AD sheet and add to new AD sheet, and update the tracker column
     if (previousAd != newAd) {
       Logger.log('AD changed');
-      if (!isInvalidAd_(previousAd)) {
+      if (!isInvalidAd_(previousAd) && userRowInAdSheet) {
         // Delete row in old AD sheet.
         Logger.log('Deleting row ' + userRowInAdSheet + ' in sheet ' + adSheet.getName() + ' because AD changed due to address change.');
         adSheet.deleteRow(userRowInAdSheet + 1);
+      } else {
+        Logger.log('Skipped deleting user ' + id + ' from previous AD sheet because either the sheet is invalid, or they were not on that sheet.');
       }
       // Copy data to new AD sheet and update tracker column. 
       maybeCopyUserDataToAdSheet_(userPositionMasterSheet, newAd, masterSheet);
@@ -572,9 +571,6 @@ function addNewUserToMasterSheet_(userPositionImportSheet, importSheet, masterSh
   }
 
   maybeCopyUserDataToAdSheet_(newRow, values[newRow][adCol], masterSheet);
-  
-  //if (userPosition == 9) { return; } // Temporary early return to test. *******
-
 }
 
 /** 
@@ -668,12 +664,6 @@ function maybeCopyUserDataToAdSheet_(userPosition, ad, masterSheet) {
  * @return {?Number} The row that the user was found, or null if not found.
  */
 function maybeGetUsersRowInCorrectSheet_(id, sheet, idCol) {
-  /*
-  var idCol = getColByName_('ID', adSheet);
-  if (idCol == -1) {
-    SpreadsheetApp.getUi().alert('Sheet is missing a column called "ID". Please add one.');
-    return;
-  } */
   var values = sheet.getDataRange().getValues();
   // Loop through each row in the spreadsheet (skipping the header row).
   for (var i = 1; i < values.length; i++) {
@@ -701,13 +691,12 @@ function maybeGetUsersRowInCorrectSheetFromCache_(id, sheet, idCol) {
     for (var i = 0; i < (lastRow); i++) {
       idsInMaster.push(values[i][0]);
     }
-    Logger.log(idsInMaster);
   }
   var pos = idsInMaster.indexOf(Number(id));
   if (pos == -1) {
     return;
   }
-  return pos; // Check for off by one errors!!!!!!!!!!!!!!!!!
+  return pos;
 }
   
 /**
@@ -787,8 +776,8 @@ function deleteAdSheetsDANGEROUS() {
    
   for (var i = 0; i < sheets.length; i++) {
     if (sheets[i].getName().length < 3) {
-      ss.deleteSheet(sheets[i]);
-      //Logger.log("deleting " + sheets[i].getName());
+      // ss.deleteSheet(sheets[i]);
+      Logger.log("deleting " + sheets[i].getName());
     }
   }
 }
@@ -827,6 +816,7 @@ function setTestToNumber() {
   var scriptProperties = PropertiesService.getScriptProperties();
   scriptProperties.setProperty("test", 1);
 }  
+  
 function testTrigger() {
   var scriptProperties = PropertiesService.getScriptProperties();
   var startRowa = scriptProperties.getProperty('test');
