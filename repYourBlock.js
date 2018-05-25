@@ -14,7 +14,6 @@ var REASONABLE_TIME_TO_WAIT = 60000;
 function onOpen() {
   var spreadsheet = SpreadsheetApp.getActive();
   var menuItems = [
-    // {name: 'Add missing AD and ED data', functionName: 'addMissingAdEd_'},
     {name: 'Add new users from import', functionName: 'movePeopleToAD'},
     {name: 'Check for changed users from import', functionName: 'checkForChanges'},
   ];
@@ -28,7 +27,7 @@ var columnNames = (columnNames || {});
 var idsInMaster = (idsInMaster || []);
 
 /** 
- * Helper function called from the NKD Menu that does all the work.
+ * A now unused helper function that was called from the NKD Menu that added missing ad/ed.
  *
  * @return null
  */
@@ -239,19 +238,12 @@ function getSunlightData_(address) {
   return data;
 }
 
-function scratchHelper() {
-  var importSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('master export');
-  var headers = importSheet.getDataRange().getValues().shift();
-  Logger.log(headers);
-  //var colindex = headers.indexOf(name);
-}
-
-// Helper function called by clicking on menu item.
+// Helper function to move people from the master tab to the AD sheets, called by clicking on menu item.
 function movePeopleToAD() {
   loopThroughImport_('new');
 }
 
-// Helper function called by clicking on menu item.
+// Helper function that checks for any changes to address, phone, etc from new imports, called by clicking on menu item.
 function checkForChanges() {
   loopThroughImport_('changed');
 }
